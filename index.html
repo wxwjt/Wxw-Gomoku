@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5A2B',
+                        secondary: '#D2B48C',
+                        board: '#DEB887',
+                        black: '#000000',
+                        white: '#FFFFFF',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .board-grid {
+                background-size: 100% 100%;
+                background-image: linear-gradient(to right, rgba(0,0,0,0.6) 1px, transparent 1px),
+                                  linear-gradient(to bottom, rgba(0,0,0,0.6) 1px, transparent 1px);
+            }
+            .piece-shadow {
+                filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.07)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.06));
+            }
+            .piece-transition {
+                transition: all 0.2s ease-out;
+            }
+            .btn-hover {
+                transition: all 0.2s ease;
+            }
+            .btn-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans">
+    <div class="max-w-4xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="bg-primary text-white p-6 text-center relative">
+            <div class="absolute top-4 right-4">
+                <button id="languageBtn" class="bg-white/20 hover:bg-white/30 text-white py-1 px-3 rounded-lg text-sm font-medium btn-hover">
+                    English
+                </button>
+            </div>
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold" data-lang="title">五子棋</h1>
+            <p class="text-secondary mt-2" data-lang="subtitle">人机对战</p>
+        </div>
+        
+        <div class="p-6 md:p-8 flex flex-col md:flex-row gap-6">
+            <!-- 游戏区域 -->
+            <div class="flex-1 relative">
+                <div class="aspect-square bg-board rounded-lg shadow-lg overflow-hidden board-grid" style="background-size: calc(100% / 14) calc(100% / 14);">
+                    <canvas id="gameCanvas" class="w-full h-full cursor-pointer"></canvas>
+                </div>
+                
+                <div id="gameStatus" class="mt-4 p-3 bg-secondary/20 rounded-lg text-center">
+                    <p id="statusText" class="font-medium" data-lang="gameStart">游戏开始! 黑棋先行</p>
+                </div>
+            </div>
+            
+            <!-- 游戏控制和信息 -->
+            <div class="w-full md:w-80 flex flex-col gap-6">
+                <div class="bg-gray-50 rounded-lg p-5 shadow-sm">
+                    <span class="text-gray-600" data-lang="currentTurn">当前回合</span>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">当前回合</span>
+                            <div class="flex items-center">
+                                <div id="currentPlayer" class="w-6 h-6 rounded-full bg-black mr-2 piece-shadow"></div>
+                                <span id="playerText" data-lang-var="pieceColor" data-value="1">黑棋</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600" data-lang="gameTime">游戏时间</span>
+                            <span id="gameTime" class="font-mono">00:00</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600" data-lang="moveCount">步数</span>
+                            <span id="moveCount">0</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600" data-lang="gameMode">游戏模式</span>
+                            <span id="gameModeText" data-lang="aiMode">AI对战</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600" data-lang="yourPiece">您的棋子</span>
+                            <div class="flex items-center">
+                                <div id="userPieceColor" class="w-6 h-6 rounded-full bg-black mr-2 piece-shadow"></div>
+                                <span id="userPieceText" data-lang-var="pieceColor" data-value="1">黑棋</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa-solid fa-sliders mr-2 text-primary"></i><span data-lang="settings">游戏设置</span>
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-lang="selectColor">选择棋子颜色</label>
+                            <div class="flex gap-3">
+                                <button id="blackPieceBtn" class="flex-1 bg-black text-white py-2 px-3 rounded-lg text-sm font-medium btn-hover" data-lang="blackPiece">黑棋</button>
+                                <button id="whitePieceBtn" class="flex-1 bg-white text-gray-800 border border-gray-300 py-2 px-3 rounded-lg text-sm font-medium btn-hover" data-lang="whitePiece">白棋</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-lang="aiDifficulty">AI难度</label>
+                            <div class="flex gap-3">
+                                <button id="easyBtn" class="flex-1 bg-green-100 text-green-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover" data-lang="easy">简单</button>
+                                <button id="mediumBtn" class="flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover" data-lang="medium">中等</button>
+                                <button id="hardBtn" class="flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover" data-lang="hard">困难</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa-solid fa-crown mr-2 text-primary"></i><span data-lang="rules">游戏规则</span>
+                    </h2>
+                    <ul class="text-sm text-gray-600 space-y-2">
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="rule1">黑棋和白棋轮流在棋盘上落子</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="rule2">先在横、竖或斜方向形成五子连线者获胜</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="rule3">点击棋盘上的交叉点放置棋子</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button id="restartBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center">
+                        <i class="fa-solid fa-refresh mr-2"></i><span data-lang="restart">重新开始</span>
+                    </button>
+                    <button id="undoBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center">
+                        <i class="fa-solid fa-undo mr-2"></i><span data-lang="undo">悔棋</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-4 text-center text-sm text-gray-500">
+            <p data-lang="copyright">© 2025 Wxw | 五子棋游戏</p>
+        </div>
+    </div>
+
+    <!-- 语言选择和规则说明模态框 -->
+    <div id="languageModal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-transform duration-300 scale-100">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-language text-3xl text-primary"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2" data-lang="welcomeTitle">欢迎来到五子棋游戏</h2>
+                <p class="text-gray-600 mb-6" data-lang="welcomeSubtitle">请选择您的语言和查看游戏规则</p>
+                
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3" data-lang="selectLanguage">选择语言</h3>
+                    <div class="flex gap-3">
+                        <button id="chineseBtn" class="flex-1 bg-red-100 text-red-800 py-2 px-4 rounded-lg text-sm font-medium btn-hover">中文</button>
+                        <button id="englishBtn" class="flex-1 bg-blue-100 text-blue-800 py-2 px-4 rounded-lg text-sm font-medium btn-hover">English</button>
+                    </div>
+                </div>
+                
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-3" data-lang="basicRules">基本规则</h3>
+                    <ul class="text-sm text-gray-600 space-y-2 text-left">
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="ruleDesc1">黑棋和白棋轮流在棋盘上落子</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="ruleDesc2">先在横、竖或斜方向形成五子连线者获胜</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span data-lang="ruleDesc3">黑棋先行，点击棋盘上的交叉点放置棋子</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <button id="startGameBtn" class="bg-primary hover:bg-primary/90 text-white py-3 px-8 rounded-lg font-medium btn-hover">
+                    <span data-lang="startGame">开始游戏</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 胜利提示模态框 -->
+    <div id="winModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-transform duration-300 scale-95">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-trophy text-3xl text-yellow-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2" id="winnerText" data-lang="winner">黑棋获胜!</h2>
+                <p class="text-gray-600 mb-6" id="winnerMessage" data-lang="congratulations">恭喜您赢得了这场精彩的比赛!</p>
+                <button id="newGameBtn" class="bg-primary hover:bg-primary/90 text-white py-3 px-8 rounded-lg font-medium btn-hover">
+                    <span data-lang="newGame">开始新游戏</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 游戏常量
+            const BOARD_SIZE = 15; // 15x15的棋盘
+            const CELL_SIZE = Math.min(window.innerWidth * 0.8 / BOARD_SIZE, window.innerHeight * 0.6 / BOARD_SIZE);
+            const PIECE_SIZE = CELL_SIZE * 0.8;
+            
+            // 游戏状态
+            let gameBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+            let currentPlayer = 1; // 1: 黑棋, 2: 白棋
+            let gameActive = true;
+            let moveHistory = [];
+            let gameTime = 0;
+            let timerInterval;
+            let gameMode = 'ai'; // 'ai' 或 'human'
+            let userPieceColor = 1; // 用户选择的棋子颜色: 1: 黑棋, 2: 白棋
+            let aiDifficulty = 'easy'; // 'easy', 'medium', 'hard'
+            let aiThinking = false; // AI是否正在思考
+            let currentLanguage = 'zh'; // 当前语言: 'zh' 或 'en'
+            
+            // 多语言支持
+            const translations = {
+                zh: {
+                    welcomeTitle: '欢迎来到五子棋游戏',
+                    welcomeSubtitle: '请选择您的语言和查看游戏规则',
+                    selectLanguage: '选择语言',
+                    basicRules: '基本规则',
+                    ruleDesc1: '黑棋和白棋轮流在棋盘上落子',
+                    ruleDesc2: '先在横、竖或斜方向形成五子连线者获胜',
+                    ruleDesc3: '黑棋先行，点击棋盘上的交叉点放置棋子',
+                    startGame: '开始游戏',
+                    title: '五子棋',
+                    subtitle: '人机对战',
+                    gameStart: '游戏开始! 黑棋先行',
+                    currentTurn: '当前回合',
+                    gameTime: '游戏时间',
+                    moveCount: '步数',
+                    gameMode: '游戏模式',
+                    yourPiece: '您的棋子',
+                    settings: '游戏设置',
+                    selectColor: '选择棋子颜色',
+                    blackPiece: '黑棋',
+                    whitePiece: '白棋',
+                    aiDifficulty: 'AI难度',
+                    easy: '简单',
+                    medium: '中等',
+                    hard: '困难',
+                    rules: '游戏规则',
+                    rule1: '黑棋和白棋轮流在棋盘上落子',
+                    rule2: '先在横、竖或斜方向形成五子连线者获胜',
+                    rule3: '点击棋盘上的交叉点放置棋子',
+                    restart: '重新开始',
+                    undo: '悔棋',
+                    copyright: '© 2025 五子棋游戏 | 一个简单的 Web 游戏',
+                    winner: '黑棋获胜!',
+                    youWin: '您获胜了!',
+                    youLose: '您失败了!',
+                    congratulations: '恭喜您赢得了这场精彩的比赛!',
+                    betterLuck: '很遗憾，这次没能获胜，再接再厉!',
+                    newGame: '开始新游戏',
+                    aiMode: 'AI对战',
+                    aiThinking: 'AI正在思考...',
+                    gameInProgress: '游戏进行中 - {player} ({color})回合',
+                    gameOverDraw: '游戏结束 - 平局!',
+                    black: '黑棋',
+                    white: '白棋',
+                    you: '您',
+                    ai: 'AI'
+                },
+                en: {
+                    welcomeTitle: 'Welcome to Gomoku',
+                    welcomeSubtitle: 'Please select your language and check the rules',
+                    selectLanguage: 'Select Language',
+                    basicRules: 'Basic Rules',
+                    ruleDesc1: 'Black and white pieces alternate placing on the board',
+                    ruleDesc2: 'The first to get five in a row (horizontally, vertically, or diagonally) wins',
+                    ruleDesc3: 'Black goes first, click on intersection points to place your piece',
+                    startGame: 'Start Game',
+                    title: 'Gomoku',
+                    subtitle: 'AI vs Human',
+                    gameStart: 'Game Start! Black goes first',
+                    currentTurn: 'Current Turn',
+                    gameTime: 'Game Time',
+                    moveCount: 'Moves',
+                    gameMode: 'Game Mode',
+                    yourPiece: 'Your Piece',
+                    settings: 'Settings',
+                    selectColor: 'Select Piece Color',
+                    blackPiece: 'Black',
+                    whitePiece: 'White',
+                    aiDifficulty: 'AI Difficulty',
+                    easy: 'Easy',
+                    medium: 'Medium',
+                    hard: 'Hard',
+                    rules: 'Game Rules',
+                    rule1: 'Black and white pieces alternate placing on the board',
+                    rule2: 'The first to get five in a row (horizontally, vertically, or diagonally) wins',
+                    rule3: 'Click on the intersection points to place your piece',
+                    restart: 'Restart',
+                    undo: 'Undo',
+                    copyright: '© 2025 Gomoku Game | A Simple Web Game',
+                    winner: 'Black wins!',
+                    youWin: 'You win!',
+                    youLose: 'You lose!',
+                    congratulations: 'Congratulations on winning this wonderful game!',
+                    betterLuck: 'Unfortunately, you didn\'t win this time. Keep trying!',
+                    newGame: 'Start New Game',
+                    aiMode: 'AI Mode',
+                    aiThinking: 'AI is thinking...',
+                    gameInProgress: 'Game in progress - {player}\'s ({color}) turn',
+                    gameOverDraw: 'Game over - Draw!',
+                    black: 'Black',
+                    white: 'White',
+                    you: 'You',
+                    ai: 'AI'
+                }
+            };
+            
+            // DOM元素
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const statusText = document.getElementById('statusText');
+            const currentPlayerEl = document.getElementById('currentPlayer');
+            const playerText = document.getElementById('playerText');
+            const moveCountEl = document.getElementById('moveCount');
+            const gameTimeEl = document.getElementById('gameTime');
+            const restartBtn = document.getElementById('restartBtn');
+            const undoBtn = document.getElementById('undoBtn');
+            const winModal = document.getElementById('winModal');
+            const winnerText = document.getElementById('winnerText');
+            const newGameBtn = document.getElementById('newGameBtn');
+            const gameModeText = document.getElementById('gameModeText');
+            const userPieceColorEl = document.getElementById('userPieceColor');
+            const userPieceText = document.getElementById('userPieceText');
+            const blackPieceBtn = document.getElementById('blackPieceBtn');
+            const whitePieceBtn = document.getElementById('whitePieceBtn');
+            const easyBtn = document.getElementById('easyBtn');
+            const mediumBtn = document.getElementById('mediumBtn');
+            const hardBtn = document.getElementById('hardBtn');
+            const languageBtn = document.getElementById('languageBtn');
+            const winnerMessage = document.getElementById('winnerMessage');
+            const languageModal = document.getElementById('languageModal');
+            const chineseBtn = document.getElementById('chineseBtn');
+            const englishBtn = document.getElementById('englishBtn');
+            const startGameBtn = document.getElementById('startGameBtn');
+            
+            // 设置Canvas尺寸
+            canvas.width = CELL_SIZE * (BOARD_SIZE - 1);
+            canvas.height = CELL_SIZE * (BOARD_SIZE - 1);
+            
+            // 绘制棋盘
+            function drawBoard() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 绘制网格线
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 1.5;
+                
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    // 水平线
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * CELL_SIZE);
+                    ctx.lineTo(canvas.width, i * CELL_SIZE);
+                    ctx.stroke();
+                    
+                    // 垂直线
+                    ctx.beginPath();
+                    ctx.moveTo(i * CELL_SIZE, 0);
+                    ctx.lineTo(i * CELL_SIZE, canvas.height);
+                    ctx.stroke();
+                }
+                
+                // 绘制天元和星位
+                const starPoints = [
+                    {x: 3, y: 3}, {x: 3, y: 11}, {x: 7, y: 7}, 
+                    {x: 11, y: 3}, {x: 11, y: 11}
+                ];
+                
+                starPoints.forEach(point => {
+                    ctx.beginPath();
+                    ctx.arc(point.x * CELL_SIZE, point.y * CELL_SIZE, 4, 0, Math.PI * 2);
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fill();
+                });
+                
+                // 绘制棋子
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] !== 0) {
+                            drawPiece(i, j, gameBoard[i][j]);
+                        }
+                    }
+                }
+            }
+            
+            // 绘制棋子
+            function drawPiece(row, col, player) {
+                const x = col * CELL_SIZE;
+                const y = row * CELL_SIZE;
+                
+                // 棋子阴影
+                ctx.beginPath();
+                ctx.arc(x, y, PIECE_SIZE / 2 + 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fill();
+                
+                // 棋子本体
+                ctx.beginPath();
+                ctx.arc(x, y, PIECE_SIZE / 2, 0, Math.PI * 2);
+                
+                if (player === 1) {
+                    // 黑棋 - 渐变效果
+                    const gradient = ctx.createRadialGradient(
+                        x - PIECE_SIZE / 6, y - PIECE_SIZE / 6, PIECE_SIZE / 10,
+                        x, y, PIECE_SIZE / 2
+                    );
+                    gradient.addColorStop(0, '#555');
+                    gradient.addColorStop(1, '#000');
+                    ctx.fillStyle = gradient;
+                } else {
+                    // 白棋 - 渐变效果
+                    const gradient = ctx.createRadialGradient(
+                        x - PIECE_SIZE / 6, y - PIECE_SIZE / 6, PIECE_SIZE / 10,
+                        x, y, PIECE_SIZE / 2
+                    );
+                    gradient.addColorStop(0, '#fff');
+                    gradient.addColorStop(1, '#ddd');
+                    ctx.fillStyle = gradient;
+                }
+                
+                ctx.fill();
+                
+                // 棋子边缘
+                ctx.strokeStyle = player === 1 ? '#333' : '#ccc';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            
+            // 检查胜利条件
+            function checkWin(row, col, player) {
+                const directions = [
+                    [1, 0],   // 水平
+                    [0, 1],   // 垂直
+                    [1, 1],   // 对角线
+                    [1, -1]   // 反对角线
+                ];
+                
+                for (const [dx, dy] of directions) {
+                    let count = 1;  // 当前位置已经有一个棋子
+                    
+                    // 正向检查
+                    for (let i = 1; i < 5; i++) {
+                        const newRow = row + i * dy;
+                        const newCol = col + i * dx;
+                        
+                        if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                            break;
+                        }
+                        
+                        if (gameBoard[newRow][newCol] === player) {
+                            count++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 反向检查
+                    for (let i = 1; i < 5; i++) {
+                        const newRow = row - i * dy;
+                        const newCol = col - i * dx;
+                        
+                        if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                            break;
+                        }
+                        
+                        if (gameBoard[newRow][newCol] === player) {
+                            count++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    if (count >= 5) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            // 检查平局
+            function checkDraw() {
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            return false; // 还有空位，不是平局
+                        }
+                    }
+                }
+                return true; // 棋盘已满，平局
+            }
+            
+            // 更新游戏状态显示
+            function updateGameStatus() {
+                if (gameActive) {
+                    const playerType = (currentPlayer === userPieceColor) ? translations[currentLanguage].you : translations[currentLanguage].ai;
+                    const colorText = currentPlayer === 1 ? translations[currentLanguage].black : translations[currentLanguage].white;
+                    statusText.textContent = translations[currentLanguage].gameInProgress
+                        .replace('{player}', playerType)
+                        .replace('{color}', colorText);
+                    currentPlayerEl.className = `w-6 h-6 rounded-full ${currentPlayer === 1 ? 'bg-black' : 'bg-white border border-gray-300'} mr-2 piece-shadow`;
+                    
+                    // 更新棋子颜色文本
+                    updatePieceColorText();
+                }
+                moveCountEl.textContent = moveHistory.length;
+                
+                // 更新用户棋子颜色显示
+                userPieceColorEl.className = `w-6 h-6 rounded-full ${userPieceColor === 1 ? 'bg-black' : 'bg-white border border-gray-300'} mr-2 piece-shadow`;
+                
+                // 更新棋子颜色文本
+                updatePieceColorText();
+            }
+            
+            // 更新棋子颜色文本
+            function updatePieceColorText() {
+                const blackText = translations[currentLanguage].black;
+                const whiteText = translations[currentLanguage].white;
+                
+                // 更新当前玩家棋子颜色文本
+                playerText.textContent = currentPlayer === 1 ? blackText : whiteText;
+                playerText.setAttribute('data-value', currentPlayer);
+                
+                // 更新用户棋子颜色文本
+                userPieceText.textContent = userPieceColor === 1 ? blackText : whiteText;
+                userPieceText.setAttribute('data-value', userPieceColor);
+            }
+            
+            // 切换语言
+            function switchLanguage() {
+                currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh';
+                updateLanguage();
+            }
+            
+            // 更新语言显示
+            function updateLanguage() {
+                // 更新所有带data-lang属性的元素
+                document.querySelectorAll('[data-lang]').forEach(el => {
+                    const key = el.getAttribute('data-lang');
+                    if (translations[currentLanguage][key]) {
+                        el.textContent = translations[currentLanguage][key];
+                    }
+                });
+                
+                // 更新带变量的文本
+                updateGameStatus();
+                
+                // 更新按钮文本
+                languageBtn.textContent = currentLanguage === 'zh' ? 'English' : '中文';
+                
+                // 如果游戏已结束，更新胜利信息
+                if (!gameActive && winnerText.textContent) {
+                    const winner = winnerText.getAttribute('data-winner');
+                    if (winner) {
+                        updateWinnerText(parseInt(winner));
+                    }
+                }
+            }
+            
+            // 隐藏语言选择模态框
+            function hideLanguageModal() {
+                languageModal.classList.add('opacity-0');
+                setTimeout(() => {
+                    languageModal.classList.add('hidden');
+                }, 300);
+            }
+            
+            // 更新游戏时间
+            function updateGameTime() {
+                gameTime++;
+                const minutes = Math.floor(gameTime / 60).toString().padStart(2, '0');
+                const seconds = (gameTime % 60).toString().padStart(2, '0');
+                gameTimeEl.textContent = `${minutes}:${seconds}`;
+            }
+            
+            // 开始计时
+            function startTimer() {
+                clearInterval(timerInterval);
+                timerInterval = setInterval(updateGameTime, 1000);
+            }
+            
+            // 停止计时
+            function stopTimer() {
+                clearInterval(timerInterval);
+            }
+            
+            // 显示胜利模态框
+            function showWinModal(winner) {
+                gameActive = false;
+                stopTimer();
+                
+                // 保存胜利者信息，用于语言切换
+                winnerText.setAttribute('data-winner', winner);
+                
+                // 更新胜利文本
+                updateWinnerText(winner);
+                
+                winModal.classList.remove('hidden');
+                
+                // 添加动画效果
+                setTimeout(() => {
+                    winModal.classList.add('opacity-100');
+                    winModal.querySelector('div').classList.remove('scale-95');
+                    winModal.querySelector('div').classList.add('scale-100');
+                }, 10);
+            }
+            
+            // 更新胜利文本
+            function updateWinnerText(winner) {
+                if (winner === userPieceColor) {
+                    // 用户获胜
+                    winnerText.textContent = translations[currentLanguage].youWin;
+                    winnerMessage.textContent = translations[currentLanguage].congratulations;
+                } else {
+                    // AI获胜
+                    winnerText.textContent = translations[currentLanguage].youLose;
+                    winnerMessage.textContent = translations[currentLanguage].betterLuck;
+                }
+            }
+            
+            // 隐藏胜利模态框
+            function hideWinModal() {
+                winModal.classList.remove('opacity-100');
+                winModal.querySelector('div').classList.remove('scale-100');
+                winModal.querySelector('div').classList.add('scale-95');
+                
+                setTimeout(() => {
+                    winModal.classList.add('hidden');
+                }, 300);
+            }
+            
+            // 重置游戏
+            function resetGame() {
+                gameBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+                currentPlayer = 1; // 黑棋先行
+                gameActive = true;
+                moveHistory = [];
+                gameTime = 0;
+                aiThinking = false;
+                
+                drawBoard();
+                updateGameStatus();
+                gameTimeEl.textContent = '00:00';
+                
+                stopTimer();
+                startTimer();
+                
+                hideWinModal();
+                
+                // 如果用户选择了白棋，AI（黑棋）先下
+                if (gameMode === 'ai' && userPieceColor === 2) {
+                    setTimeout(makeAIMove, 500);
+                }
+            }
+            
+            // 悔棋
+            function undoMove() {
+                if (moveHistory.length === 0 || !gameActive || aiThinking) {
+                    return;
+                }
+                
+                // 如果是AI对战模式，需要撤销两步（用户和AI的一步）
+                if (gameMode === 'ai') {
+                    if (moveHistory.length >= 2) {
+                        // 撤销AI的一步
+                        const aiMove = moveHistory.pop();
+                        gameBoard[aiMove.row][aiMove.col] = 0;
+                        
+                        // 撤销用户的一步
+                        const userMove = moveHistory.pop();
+                        gameBoard[userMove.row][userMove.col] = 0;
+                        
+                        currentPlayer = userMove.player; // 回到用户的回合
+                    }
+                } else {
+                    // 双人对战模式，只撤销一步
+                    const lastMove = moveHistory.pop();
+                    gameBoard[lastMove.row][lastMove.col] = 0;
+                    currentPlayer = lastMove.player; // 回到上一个玩家
+                }
+                
+                drawBoard();
+                updateGameStatus();
+            }
+            
+            // AI决策逻辑 - 简单难度（增强版）
+            function makeEasyAIMove() {
+                const aiPlayer = userPieceColor === 1 ? 2 : 1; // AI的棋子颜色
+                const humanPlayer = userPieceColor; // 人类玩家的棋子颜色
+                
+                // 1. 检查AI是否有获胜机会（简单AI也应该会赢）
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = aiPlayer;
+                            if (checkWin(i, j, aiPlayer)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 2. 简单阻挡：如果玩家有连续3个或以上，进行阻挡
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = humanPlayer;
+                            // 检查是否有3连子或以上
+                            if (checkPotentialWin(i, j, humanPlayer, 3)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 3. 优先选择靠近中心或已有棋子的位置
+                const center = Math.floor(BOARD_SIZE / 2);
+                const weightedPositions = [];
+                
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            let weight = 1; // 基础权重
+                            
+                            // 距离中心越近权重越高
+                            const distanceToCenter = Math.abs(i - center) + Math.abs(j - center);
+                            weight += (BOARD_SIZE - distanceToCenter) * 0.1;
+                            
+                            // 如果附近有棋子，增加权重
+                            let nearbyPieces = 0;
+                            for (let dx = -2; dx <= 2; dx++) {
+                                for (let dy = -2; dy <= 2; dy++) {
+                                    const newRow = i + dy;
+                                    const newCol = j + dx;
+                                    if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+                                        if (gameBoard[newRow][newCol] !== 0) {
+                                            nearbyPieces++;
+                                        }
+                                    }
+                                }
+                            }
+                            weight += nearbyPieces * 0.3;
+                            
+                            weightedPositions.push({row: i, col: j, weight: weight});
+                        }
+                    }
+                }
+                
+                // 按权重排序
+                weightedPositions.sort((a, b) => b.weight - a.weight);
+                
+                // 从前20个位置中随机选择一个（增加一些随机性）
+                const candidates = weightedPositions.slice(0, Math.min(20, weightedPositions.length));
+                if (candidates.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * candidates.length);
+                    return candidates[randomIndex];
+                }
+                
+                // 如果没有找到合适的位置，随机选择一个
+                const emptyCells = [];
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            emptyCells.push({row: i, col: j});
+                        }
+                    }
+                }
+                
+                if (emptyCells.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * emptyCells.length);
+                    return emptyCells[randomIndex];
+                }
+                
+                return null;
+            }
+            
+            // 检查潜在的胜利（用于简单AI的阻挡逻辑）
+            function checkPotentialWin(row, col, player, minCount) {
+                const directions = [
+                    [1, 0],   // 水平
+                    [0, 1],   // 垂直
+                    [1, 1],   // 对角线
+                    [1, -1]   // 反对角线
+                ];
+                
+                for (const [dx, dy] of directions) {
+                    let count = 1;  // 当前位置已经有一个棋子
+                    
+                    // 正向检查
+                    for (let i = 1; i < 5; i++) {
+                        const newRow = row + i * dy;
+                        const newCol = col + i * dx;
+                        
+                        if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                            break;
+                        }
+                        
+                        if (gameBoard[newRow][newCol] === player) {
+                            count++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // 反向检查
+                    for (let i = 1; i < 5; i++) {
+                        const newRow = row - i * dy;
+                        const newCol = col - i * dx;
+                        
+                        if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                            break;
+                        }
+                        
+                        if (gameBoard[newRow][newCol] === player) {
+                            count++;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    if (count >= minCount) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            // AI决策逻辑 - 中等难度
+            function makeMediumAIMove() {
+                const aiPlayer = userPieceColor === 1 ? 2 : 1; // AI的棋子颜色
+                const humanPlayer = userPieceColor; // 人类玩家的棋子颜色
+                
+                // 1. 检查AI是否有获胜机会
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = aiPlayer;
+                            if (checkWin(i, j, aiPlayer)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 2. 检查玩家是否有获胜机会，进行阻挡
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = humanPlayer;
+                            if (checkWin(i, j, humanPlayer)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 3. 如果没有直接的获胜或阻挡机会，选择一个靠近中心的位置
+                const centerPreference = [];
+                const center = Math.floor(BOARD_SIZE / 2);
+                
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            // 计算到中心的距离
+                            const distance = Math.abs(i - center) + Math.abs(j - center);
+                            centerPreference.push({row: i, col: j, distance: distance});
+                        }
+                    }
+                }
+                
+                // 按距离中心的远近排序
+                centerPreference.sort((a, b) => a.distance - b.distance);
+                
+                // 从前10个位置中随机选择一个
+                const candidates = centerPreference.slice(0, Math.min(10, centerPreference.length));
+                if (candidates.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * candidates.length);
+                    return candidates[randomIndex];
+                }
+                
+                return null;
+            }
+            
+            // AI决策逻辑 - 困难难度
+            function makeHardAIMove() {
+                const aiPlayer = userPieceColor === 1 ? 2 : 1; // AI的棋子颜色
+                const humanPlayer = userPieceColor; // 人类玩家的棋子颜色
+                
+                // 评分系统
+                function evaluatePosition(row, col, player) {
+                    let score = 0;
+                    const directions = [
+                        [1, 0],   // 水平
+                        [0, 1],   // 垂直
+                        [1, 1],   // 对角线
+                        [1, -1]   // 反对角线
+                    ];
+                    
+                    for (const [dx, dy] of directions) {
+                        let count = 1;
+                        let blocked = 0;
+                        
+                        // 正向检查
+                        for (let i = 1; i < 5; i++) {
+                            const newRow = row + i * dy;
+                            const newCol = col + i * dx;
+                            
+                            if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                                blocked++;
+                                break;
+                            }
+                            
+                            if (gameBoard[newRow][newCol] === player) {
+                                count++;
+                            } else if (gameBoard[newRow][newCol] === 0) {
+                                break;
+                            } else {
+                                blocked++;
+                                break;
+                            }
+                        }
+                        
+                        // 反向检查
+                        for (let i = 1; i < 5; i++) {
+                            const newRow = row - i * dy;
+                            const newCol = col - i * dx;
+                            
+                            if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                                blocked++;
+                                break;
+                            }
+                            
+                            if (gameBoard[newRow][newCol] === player) {
+                                count++;
+                            } else if (gameBoard[newRow][newCol] === 0) {
+                                break;
+                            } else {
+                                blocked++;
+                                break;
+                            }
+                        }
+                        
+                        // 评分规则
+                        if (count >= 5) {
+                            score += 10000; // 五连子，必胜
+                        } else if (count === 4 && blocked === 0) {
+                            score += 1000; // 活四
+                        } else if (count === 4 && blocked === 1) {
+                            score += 100; // 冲四
+                        } else if (count === 3 && blocked === 0) {
+                            score += 50; // 活三
+                        } else if (count === 3 && blocked === 1) {
+                            score += 10; // 冲三
+                        } else if (count === 2 && blocked === 0) {
+                            score += 5; // 活二
+                        } else if (count === 2 && blocked === 1) {
+                            score += 1; // 冲二
+                        }
+                    }
+                    
+                    return score;
+                }
+                
+                // 1. 检查AI是否有获胜机会
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = aiPlayer;
+                            if (checkWin(i, j, aiPlayer)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 2. 检查玩家是否有获胜机会，进行阻挡
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            gameBoard[i][j] = humanPlayer;
+                            if (checkWin(i, j, humanPlayer)) {
+                                gameBoard[i][j] = 0; // 撤销测试落子
+                                return {row: i, col: j};
+                            }
+                            gameBoard[i][j] = 0; // 撤销测试落子
+                        }
+                    }
+                }
+                
+                // 3. 使用评分系统选择最佳位置
+                let bestScore = -Infinity;
+                let bestMove = null;
+                const center = Math.floor(BOARD_SIZE / 2);
+                
+                for (let i = 0; i < BOARD_SIZE; i++) {
+                    for (let j = 0; j < BOARD_SIZE; j++) {
+                        if (gameBoard[i][j] === 0) {
+                            // 计算位置评分
+                            let positionScore = 0;
+                            
+                            // 评估AI在此位置落子的价值
+                            gameBoard[i][j] = aiPlayer;
+                            positionScore += evaluatePosition(i, j, aiPlayer);
+                            
+                            // 评估玩家在此位置落子的价值（阻挡价值）
+                            gameBoard[i][j] = humanPlayer;
+                            positionScore += evaluatePosition(i, j, humanPlayer) * 0.8; // 稍微降低阻挡的优先级
+                            
+                            // 恢复棋盘
+                            gameBoard[i][j] = 0;
+                            
+                            // 增加中心位置的权重
+                            const distanceToCenter = Math.abs(i - center) + Math.abs(j - center);
+                            positionScore -= distanceToCenter * 0.1;
+                            
+                            // 如果有棋子在附近，增加权重
+                            let nearbyPieces = 0;
+                            for (let dx = -2; dx <= 2; dx++) {
+                                for (let dy = -2; dy <= 2; dy++) {
+                                    const newRow = i + dy;
+                                    const newCol = j + dx;
+                                    if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+                                        if (gameBoard[newRow][newCol] !== 0) {
+                                            nearbyPieces++;
+                                        }
+                                    }
+                                }
+                            }
+                            positionScore += nearbyPieces * 0.5;
+                            
+                            // 更新最佳移动
+                            if (positionScore > bestScore) {
+                                bestScore = positionScore;
+                                bestMove = {row: i, col: j};
+                            }
+                        }
+                    }
+                }
+                
+                return bestMove;
+            }
+            
+            // AI落子
+            function makeAIMove() {
+                if (!gameActive || aiThinking) return;
+                
+                aiThinking = true;
+                statusText.textContent = translations[currentLanguage].aiThinking;
+                
+                // 根据难度选择AI决策函数
+                let aiMove;
+                setTimeout(() => {
+                    switch (aiDifficulty) {
+                        case 'easy':
+                            aiMove = makeEasyAIMove();
+                            break;
+                        case 'medium':
+                            aiMove = makeMediumAIMove();
+                            break;
+                        case 'hard':
+                            aiMove = makeHardAIMove();
+                            break;
+                        default:
+                            aiMove = makeEasyAIMove();
+                    }
+                    
+                    if (aiMove) {
+                        // AI落子
+                        gameBoard[aiMove.row][aiMove.col] = currentPlayer;
+                        moveHistory.push({row: aiMove.row, col: aiMove.col, player: currentPlayer});
+                        
+                        // 绘制棋盘
+                        drawBoard();
+                        
+                        // 检查AI是否胜利
+                        if (checkWin(aiMove.row, aiMove.col, currentPlayer)) {
+                            showWinModal(currentPlayer);
+                            aiThinking = false;
+                            return;
+                        }
+                        
+                        // 检查是否平局
+                        if (checkDraw()) {
+                            gameActive = false;
+                            stopTimer();
+                            statusText.textContent = translations[currentLanguage].gameOverDraw;
+                            aiThinking = false;
+                            return;
+                        }
+                        
+                        // 切换玩家
+                        currentPlayer = currentPlayer === 1 ? 2 : 1;
+                        updateGameStatus();
+                    }
+                    
+                    aiThinking = false;
+                }, 800); // 让AI思考一段时间，增加游戏体验
+            }
+            
+            // 点击棋盘事件
+            canvas.addEventListener('click', (e) => {
+                if (!gameActive || (gameMode === 'ai' && currentPlayer !== userPieceColor) || aiThinking) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                // 计算点击的格子坐标
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                
+                const col = Math.round(x / CELL_SIZE);
+                const row = Math.round(y / CELL_SIZE);
+                
+                // 检查坐标是否在棋盘内且为空
+                if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE && gameBoard[row][col] === 0) {
+                    // 落子
+                    gameBoard[row][col] = currentPlayer;
+                    moveHistory.push({row, col, player: currentPlayer});
+                    
+                    // 添加落子动画效果
+                    drawBoard();
+                    
+                    // 检查是否胜利
+                    if (checkWin(row, col, currentPlayer)) {
+                        showWinModal(currentPlayer);
+                        return;
+                    }
+                    
+                    // 检查是否平局
+                    if (checkDraw()) {
+                        gameActive = false;
+                        stopTimer();
+                        statusText.textContent = translations[currentLanguage].gameOverDraw;
+                        return;
+                    }
+                    
+                    // 切换玩家
+                    currentPlayer = currentPlayer === 1 ? 2 : 1;
+                    updateGameStatus();
+                    
+                    // 如果是AI对战模式且当前是AI回合，让AI落子
+                    if (gameMode === 'ai' && currentPlayer !== userPieceColor) {
+                        setTimeout(makeAIMove, 300);
+                    }
+                }
+            });
+            
+            // 鼠标悬停预览效果
+            canvas.addEventListener('mousemove', (e) => {
+                if (!gameActive) return;
+                
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                // 计算鼠标所在的格子坐标
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                
+                const col = Math.round(x / CELL_SIZE);
+                const row = Math.round(y / CELL_SIZE);
+                
+                // 清除之前的预览
+                drawBoard();
+                
+                // 如果坐标在棋盘内且为空，绘制预览棋子
+                if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE && gameBoard[row][col] === 0) {
+                    ctx.beginPath();
+                    ctx.arc(col * CELL_SIZE, row * CELL_SIZE, PIECE_SIZE / 2, 0, Math.PI * 2);
+                    
+                    if (currentPlayer === 1) {
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    }
+                    
+                    ctx.fill();
+                }
+            });
+            
+            // 鼠标离开棋盘时重绘
+            canvas.addEventListener('mouseleave', () => {
+                drawBoard();
+            });
+            
+            // 事件监听
+            restartBtn.addEventListener('click', resetGame);
+            undoBtn.addEventListener('click', undoMove);
+            newGameBtn.addEventListener('click', resetGame);
+            languageBtn.addEventListener('click', switchLanguage);
+            
+            // 语言选择按钮
+            chineseBtn.addEventListener('click', () => {
+                currentLanguage = 'zh';
+                updateLanguage();
+            });
+            
+            englishBtn.addEventListener('click', () => {
+                currentLanguage = 'en';
+                updateLanguage();
+            });
+            
+            // 开始游戏按钮
+            startGameBtn.addEventListener('click', () => {
+                hideLanguageModal();
+                // 如果用户选择了白棋，AI（黑棋）先下
+                if (gameMode === 'ai' && userPieceColor === 2) {
+                    setTimeout(makeAIMove, 500);
+                }
+            });
+            
+            // 棋子颜色选择
+            blackPieceBtn.addEventListener('click', () => {
+                // 允许在游戏开始前选择颜色
+                if (!gameActive || moveHistory.length === 0) {
+                    userPieceColor = 1;
+                    updateGameStatus();
+                    blackPieceBtn.className = 'flex-1 bg-black text-white py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                    whitePieceBtn.className = 'flex-1 bg-white text-gray-800 border border-gray-300 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                    
+                    // 如果游戏尚未开始且选择了黑棋，确保黑棋先行
+                    if (gameActive && moveHistory.length === 0) {
+                        currentPlayer = 1;
+                        updateGameStatus();
+                    }
+                }
+            });
+            
+            whitePieceBtn.addEventListener('click', () => {
+                // 允许在游戏开始前选择颜色
+                if (!gameActive || moveHistory.length === 0) {
+                    userPieceColor = 2;
+                    updateGameStatus();
+                    whitePieceBtn.className = 'flex-1 bg-white text-black py-2 px-3 rounded-lg text-sm font-medium btn-hover border border-gray-300';
+                    blackPieceBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                    
+                    // 如果游戏尚未开始且选择了白棋，AI（黑棋）先下
+                    if (gameActive && moveHistory.length === 0) {
+                        currentPlayer = 1; // 黑棋先行
+                        updateGameStatus();
+                        setTimeout(makeAIMove, 500);
+                    }
+                }
+            });
+            
+            // AI难度选择
+            easyBtn.addEventListener('click', () => {
+                aiDifficulty = 'easy';
+                easyBtn.className = 'flex-1 bg-green-100 text-green-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                mediumBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                hardBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+            });
+            
+            mediumBtn.addEventListener('click', () => {
+                aiDifficulty = 'medium';
+                mediumBtn.className = 'flex-1 bg-yellow-100 text-yellow-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                easyBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                hardBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+            });
+            
+            hardBtn.addEventListener('click', () => {
+                aiDifficulty = 'hard';
+                hardBtn.className = 'flex-1 bg-red-100 text-red-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                easyBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+                mediumBtn.className = 'flex-1 bg-gray-100 text-gray-800 py-2 px-3 rounded-lg text-sm font-medium btn-hover';
+            });
+            
+            // 初始化游戏
+            drawBoard();
+            updateGameStatus();
+            startTimer();
+            
+            // 显示语言选择模态框
+            languageModal.classList.remove('hidden');
+            setTimeout(() => {
+                languageModal.classList.add('opacity-100');
+            }, 10);
+        });
+    </script>
+</body>
+</html>
